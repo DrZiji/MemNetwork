@@ -1,0 +1,7 @@
+{
+    "editor.fontSize": 13,
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintPath":"D:\\IDE\\Anaconda3\\pkgs\\pylint-2.1.1-py35_0\\Scripts\\pylint"
+
+}
