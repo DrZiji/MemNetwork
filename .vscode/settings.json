@@ -1,7 +1,5 @@
 {
     "editor.fontSize": 13,
-    "python.linting.pylintEnabled": true,
-    "python.linting.enabled": true,
-    "python.linting.pylintPath":"D:\\IDE\\Anaconda3\\pkgs\\pylint-2.1.1-py35_0\\Scripts\\pylint"
-
+    "python.linting.pylintArgs": ["--errors-only", "--generated-members=numpy.* ,torch.* ,cv2.* , cv.*"],
+    "python.pythonPath": "D:\\IDE\\Anaconda3\\python.exe"
 }
