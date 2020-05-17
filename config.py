@@ -41,6 +41,10 @@ class Config:
 
 config = Config()
 
+class MemDataConfig:
+    sequence_dataset = 49                  # Per video length for one object
+    sequence_train = 16                    # training video length sampled in dataset
+    sequence_eval = 48                     # evaluate video length sampled in dataset
 
 class ModeKeys:
     train = 'TRAIN'
