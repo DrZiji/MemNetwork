@@ -1,5 +1,5 @@
 {
-    "editor.fontSize": 13,
+    "editor.fontSize": 16,
     "python.linting.pylintArgs": ["--errors-only", "--generated-members=numpy.* ,torch.* ,cv2.* , cv.*"],
-    "python.pythonPath": "D:\\IDE\\Anaconda3\\python.exe"
+    "python.pythonPath": "F:\\Anaconda3\\python.exe"
 }

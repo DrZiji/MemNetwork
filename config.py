@@ -40,3 +40,11 @@ class Config:
     blur_ratio = 0.15
 
 config = Config()
+
+
+class ModeKeys:
+    train = 'TRAIN'
+    evaluate = 'EVAL'
+    test = 'TEST'
+
+modekey = ModeKeys()
