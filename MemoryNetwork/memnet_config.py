@@ -9,3 +9,10 @@ class MemTrackConfig:
     gate_num = 3
 
 MTConfig = MemTrackConfig()
+
+class ObjGuidedEMemConfig:
+    batch = 8
+    memory_depth = 256
+    multi_embed = 8
+
+OGEMemConfig = ObjGuidedEMemConfig()

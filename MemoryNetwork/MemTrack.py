@@ -23,7 +23,8 @@ class MemTrack(MemNetBase):
             self.device = 'cpu'
         else:
             self.device = 'cuda:'+str(gpu_id)
-    
+
+
     def on_step_start(self, time_step):
         """
         :param time_step: Memory Network和LSTM类似，样本是时间序列，该变量记录本次调用的时间步。值从1开始
@@ -35,7 +36,7 @@ class MemTrack(MemNetBase):
                 init_memory = torch.zeros(MTConfig.memory_size, dtype=torch.float)
                 # init_write, init_usage, init_gate one-hot
                 temp1 = torch.zeros((MTConfig.batch, MTConfig.memory_slot), dtype=torch.float)
-                index1 = torch.zeros((MTConfig.batch,1), dtype=torch.long)
+                index1 = torch.zeros((MTConfig.batch, 1), dtype=torch.long)
                 init_write = temp1.scatter(1, index1, 1.0)
                 init_usage = temp1.scatter(1, index1, 1.0)
                 
