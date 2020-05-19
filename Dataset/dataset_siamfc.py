@@ -7,7 +7,7 @@ import lmdb
 import hashlib
 from torch.utils.data.dataset import Dataset
 
-from config import config
+from global_config import config
 
 class ImagnetVIDDataset(Dataset):
     def __init__(self, db, video_names, data_dir, z_transforms, x_transforms, training=True):

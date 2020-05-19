@@ -2,7 +2,7 @@ import torch
 import numpy
 from torch import nn
 from base import MemNetBase
-from MemTrackConfig import MTConfig
+from memnet_config import MTConfig
 
 class MemTrack(MemNetBase):
     """
