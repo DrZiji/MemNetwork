@@ -10,7 +10,7 @@ class RandomStretch(object):
         """
         self.max_stretch = max_stretch
 
-    def __call__(self, sample):
+    def __call__(self, sample, bbox):
         """
         Args:
             sample(numpy array): 3 or 1 dim image
@@ -19,7 +19,13 @@ class RandomStretch(object):
         scale_w = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         h, w = sample.shape[:2]
         shape = (int(h * scale_h), int(w * scale_w))
-        return cv2.resize(sample, shape, cv2.INTER_LINEAR)
+        bbox_stretch = np.array([
+            bbox[0] * scale_w,
+            bbox[1] * scale_h,
+            bbox[2] * scale_w,
+            bbox[3] * scale_h
+        ])
+        return cv2.resize(sample, shape, cv2.INTER_LINEAR), bbox_stretch
 
 class CenterCrop(object):
     def __init__(self, size):
@@ -30,7 +36,7 @@ class CenterCrop(object):
         """
         self.size = size
 
-    def __call__(self, sample):
+    def __call__(self, sample, bbox):
         """
         Args:
             sample(numpy array): 3 or 1 dim image
@@ -56,10 +62,12 @@ class CenterCrop(object):
         ymin = int(max(0, ymin))
         ymax = int(min(im_h, ymax))
         im_patch = sample[ymin:ymax, xmin:xmax]
+        bbox[0] = bbox[0] - xmin
+        bbox[1] = bbox[1] - ymin
         if left != 0 or right !=0 or top!=0 or bottom!=0:
             im_patch = cv2.copyMakeBorder(im_patch, top, bottom, left, right,
                     cv2.BORDER_CONSTANT, value=0)
-        return im_patch
+        return im_patch, bbox
 
 class RandomCrop(object):
     def __init__(self, size, max_translate):
@@ -72,7 +80,7 @@ class RandomCrop(object):
         self.size = size
         self.max_translate = max_translate
 
-    def __call__(self, sample):
+    def __call__(self, sample, bbox):
         """
         Args:
             sample(numpy array): 3 or 1 dim image
@@ -106,10 +114,12 @@ class RandomCrop(object):
         ymin = int(max(0, ymin))
         ymax = int(min(im_h, ymax))
         im_patch = sample[ymin:ymax, xmin:xmax]
+        bbox[0] = bbox[0] - xmin
+        bbox[1] = bbox[1] - ymin
         if left != 0 or right !=0 or top!=0 or bottom!=0:
             im_patch = cv2.copyMakeBorder(im_patch, top, bottom, left, right,
                     cv2.BORDER_CONSTANT, value=0)
-        return im_patch
+        return im_patch, bbox
 
 class ColorAug(object):
     def __init__(self, type_in='z'):
@@ -124,33 +134,33 @@ class ColorAug(object):
         self.v, _ = np.linalg.eig(rgb_var)
         self.v = np.sqrt(self.v)
 
-    def __call__(self, sample):
-        return sample + 0.1 * self.v * np.random.randn(3)
+    def __call__(self, sample, bbox):
+        return sample + 0.1 * self.v * np.random.randn(3), bbox
 
 
 class RandomBlur(object):
     def __init__(self, ratio):
         self.ratio = ratio
 
-    def __call__(self, sample):
+    def __call__(self, sample, bbox):
         if np.random.rand(1) < self.ratio:
             # random kernel size
             kernel_size = np.random.choice([3, 5, 7])
             # random gaussian sigma
             sigma = np.random.rand() * 5
-            return cv2.GaussianBlur(sample, (kernel_size,kernel_size), sigma)
+            return cv2.GaussianBlur(sample, (kernel_size,kernel_size), sigma), bbox
         else:
-            return sample
+            return sample, bbox
 
 class Normalize(object):
     def __init__(self):
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-    def __call__(self, sample):
-        return (sample / 255. - self.mean) / self.std
+    def __call__(self, sample, bbox):
+        return (sample / 255. - self.mean) / self.std, bbox
 
 class ToTensor(object):
-    def __call__(self, sample):
+    def __call__(self, sample, bbox):
         sample = sample.transpose(2, 0, 1)
-        return torch.from_numpy(sample.astype(np.float32))
+        return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(bbox.astype(np.float32))

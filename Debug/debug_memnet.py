@@ -7,12 +7,14 @@ from MemoryNetwork.ObjGuidedEMem import OGEMem
 
 
 if __name__ == "__main__":
-    OGEMem_ins = OGEMem(8, 8, -1)
+    OGEMem_ins = OGEMem(10, 10, -1)
 
-    prev_obj = torch.from_numpy(np.random.rand(2, 4, 4, 8)).float()
-    pres_fea = torch.from_numpy(np.random.rand(2, 8, 8, 8)).float()
-    prev_fea = torch.from_numpy(np.random.rand(2, 8, 8, 8)).float()
-    prev_trk = [2, 0.5]
-    for time_step in range(2):
-        mnet_output = OGEMem_ins(prev_fea, None, prev_trk, pres_fea, time_step + 1, prev_obj)
+    for time_step in range(10):
+            # prev_obj = torch.from_numpy(np.random.rand(2, 6, 4, 8)).float()
+        pres_fea = torch.from_numpy(np.random.rand(2, 10, 8, 10)).float()
+        prev_fea = torch.from_numpy(np.random.rand(2, 10, 8, 10)).float()
+        prev_bbox = np.array([[0, 1, 3, 3],
+                            [1, 2, 5, 8]])
+        prev_trk = [2, 0.5]
+        mnet_output = OGEMem_ins(prev_fea, prev_bbox, pres_fea, time_step + 1, prev_trk)
     print()

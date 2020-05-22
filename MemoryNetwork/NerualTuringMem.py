@@ -1,12 +1,12 @@
 import torch
 import numpy
 from torch import nn
-from base import MemNetBase
-from memnet_config import MTConfig
+from .base import MemNetBase
+from .memnet_config import MTConfig
 
-class MemTrack(MemNetBase):
+class NTMem(MemNetBase):
     """
-    MemTrack整体从t-1到t时间步各信号生成和传递过程。
+    NTMem整体从t-1到t时间步各信号生成和传递过程。
 
                         |       t
     ---------------------------------------------------------------
@@ -18,7 +18,7 @@ class MemTrack(MemNetBase):
     """
 
     def __init__(self, gpu_id):
-        super(MemTrack, self).__init__()
+        super(NTMem, self).__init__()
         if gpu_id < 0:
             self.device = 'cpu'
         else:

@@ -12,8 +12,8 @@ from fire import Fire
 from tqdm import tqdm
 from glob import glob
 
-from MemTrack import get_instance_image
-from config import config
+from SiamFC import get_instance_image
+from global_config import config
 
 #做了以下几件事：
 #1.在每一个video的子文件夹下建立相应的结构，这是生成meta_data.pkl的必要信息
@@ -30,8 +30,8 @@ def worker(output_dir, video_dir):
         os.mkdir(save_folder)
     trajs = {}
     for image_name in image_names:
-        #img = cv2.imread(image_name)
-        #img_mean = tuple(map(int, img.mean(axis=(0, 1))))
+        img = cv2.imread(image_name)
+        img_mean = tuple(map(int, img.mean(axis=(0, 1))))
         anno_name = image_name.replace('Data', 'Annotations')
         anno_name = anno_name.replace('JPEG', 'xml')
         tree = ET.parse(anno_name)
@@ -45,22 +45,23 @@ def worker(output_dir, video_dir):
                                   bbox.find('xmax').text,
                                   bbox.find('ymax').text]))
             trkid = int(obj.find('trackid').text)
-            if trkid in trajs:
-                trajs[trkid].append(filename)
-            else:
-                trajs[trkid] = [filename]#大概是指该图片中包含的前景种类
-            """
-            instance_img, _, _ = get_instance_image(img, bbox,
+
+            instance_img, _, _, bbox_alter = get_instance_image(img, bbox,
                     config.exemplar_size, config.data_size, config.context_amount, img_mean)
+            """
             instance_img_name = os.path.join(save_folder, filename+".{:02d}.x.jpg".format(trkid))
             cv2.imwrite(instance_img_name, instance_img)#这里已经将crop后的图片写入本地,crop的图片是(255,255,3)大小的
             """
+            if trkid in trajs:
+                trajs[trkid].append((filename, bbox_alter))
+            else:
+                trajs[trkid] = [(filename, bbox_alter)] # 大概是指该图片中包含的前景种类
     '''
     在使用数据集时需要用到这里返回的video_name和trajs,要保证每一个video_name对应的trajs中都包含视频。
     因此将判断部分移到这里
     '''
     for trkid in list(trajs.keys()):
-        if len(trajs[trkid]) <= config.sequence_dataset:
+        if len(trajs[trkid]) <= config.sequence_length:
             del trajs[trkid]
 
     if trajs:
@@ -94,7 +95,7 @@ def processing(data_dir, output_dir, num_threads=32):
             meta_data.append(ret)
     """
     # save meta data
-    pickle.dump(meta_data, open(os.path.join(output_dir, "meta_data.pkl"), 'wb'))
+    pickle.dump(meta_data, open(os.path.join(output_dir, "meta_data_memnet.pkl"), 'wb'))
 
 
 if __name__ == '__main__':

@@ -3,7 +3,12 @@ class Config:
     # dataset related
     exemplar_size = 127                    # exemplar size
     instance_size = 255                    # instance size
+    data_size = 272
     context_amount = 0.5                   # context amount
+    sequence_length = 50
+    sequence_train = 16
+    sequence_eval = 48
+    
 
     # training related
     num_per_epoch = 53200                  # num of samples per epoch
@@ -39,6 +44,7 @@ class Config:
     gray_ratio = 0.25
     blur_ratio = 0.15
 
+    
 config = Config()
 
 class MemDataConfig:

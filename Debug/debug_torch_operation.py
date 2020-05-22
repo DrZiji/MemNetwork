@@ -24,6 +24,8 @@ def repeat_debug(A: torch.Tensor, B: torch.Tensor):
 if __name__ == "__main__":
     # A = torch.from_numpy(np.random.rand(2, 4, 4))
     # A = F.softmax(A, dim=2)
-    A = torch.from_numpy(np.random.rand(2, 4, 4))
-    B = A[0, :, 1]
+    # A = torch.from_numpy(np.random.rand(2, 4, 4))
+    # B = A[0, (1, 3), :]
+    # print()
+    A = torch.arange(127, -1, -1)
     print()

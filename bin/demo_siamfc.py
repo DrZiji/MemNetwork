@@ -25,14 +25,22 @@ def main(video_dir, gpu_id,  model_path):
     title = video_dir.split('/')[-1]
     # starting tracking
     tracker = SiamFCTracker(model_path, gpu_id)
+
+    prev_bbox = None
+    prev_max_trk = None
     for idx, frame in enumerate(frames):
         if idx == 0:
             bbox = gt_bboxes.iloc[0].values
             tracker.init(frame, bbox)
             bbox = (bbox[0]-1, bbox[1]-1,
                     bbox[0]+bbox[2]-1, bbox[1]+bbox[3]-1)
-        else: 
-            bbox = tracker.update(frame)
+        elif idx == 1: 
+            bbox, max_trk = tracker.update(frame, idx)
+        else:
+            bbox, max_trk = tracker.update(frame, idx, frame[idx-1], prev_bbox, prev_max_trk)
+
+        prev_bbox = bbox
+        prev_max_trk = max_trk
         # bbox xmin ymin xmax ymax
         frame = cv2.rectangle(frame,
                               (int(bbox[0]), int(bbox[1])),
