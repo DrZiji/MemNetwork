@@ -22,7 +22,7 @@ class SiamOGEM(nn.Module):
         )
         self.conv5 = nn.Conv2d(384, 256, 3, 1, groups=2)
 
-        self.memnet = OGEMem(256, 256, gpu_id)
+        self.memnet = OGEMem(384, 384, gpu_id)
         self.corr_bias = nn.Parameter(torch.zeros(1))
         
         self.mode = mode
@@ -35,10 +35,11 @@ class SiamOGEM(nn.Module):
         self.exemplar = None
         if self.mode != modekey.test:
             gt, weight = self._create_gt_mask((config.response_sz, config.response_sz))
-            self.train_gt = torch.from_numpy(gt).to(self.device)
+
+            self.train_gt = torch.from_numpy(np.repeat(gt, config.sequence_train, axis=1)).to(self.device)
             self.train_weight = torch.from_numpy(weight).to(self.device)
 
-            self.valid_gt = torch.from_numpy(gt).to(self.device)
+            self.valid_gt = torch.from_numpy(np.repeat(gt, config.sequence_eval, axis=1)).to(self.device)
             self.valid_weight = torch.from_numpy(weight).to(self.device)
         
     def init_weights(self):
@@ -55,10 +56,10 @@ class SiamOGEM(nn.Module):
     def weighted_loss(self, pred):
         if self.training:
             return F.binary_cross_entropy_with_logits(pred, self.train_gt,
-                    self.train_weight, reduction='sum') / config.train_batch_size # normalize the batch_size
+                    self.train_weight, reduction='sum') / (config.train_batch_size * config.sequence_train) # normalize the batch_size
         else:
             return F.binary_cross_entropy_with_logits(pred, self.valid_gt,
-                    self.valid_weight, reduction='sum') / config.train_batch_size # normalize the batch_size
+                    self.valid_weight, reduction='sum') / (config.train_batch_size * config.sequence_eval) # normalize the batch_size
 
     def bbox_ori2fea(self, bbox, cog_field, stride):
         """
@@ -109,7 +110,7 @@ class SiamOGEM(nn.Module):
             s_feas = self.features(instances)
 
             temp, c, ht, wt = t_feas.shape
-            _, _, hs, ws = t_feas.shape
+            _, _, hs, ws = s_feas.shape
             t_feas = t_feas.view(b, vl, c, ht, wt)
             s_feas = s_feas.view(b, vl, c, hs, ws)
             pairs = []
@@ -118,11 +119,10 @@ class SiamOGEM(nn.Module):
             self.prev_trks = [None for _ in range(b)] # 上一帧的跟踪结果最大值,初始化为None
             t_list = [torch.Tensor.view(x, [b, c, ht, wt]) for x in t_feas.split(1, dim=1)]
             s_list = [torch.Tensor.view(x, [b, c, hs, ws]) for x in s_feas.split(1, dim=1)]
-            t_bbox_list = [x.view(b, 4).cpu().item() for x in e_bboxs.split(1, dim=1)]
+            t_bbox_list = [x.view(b, 4).cpu().numpy() for x in e_bboxs.split(1, dim=1)]
             for i in range(vl):
                 # bbox_fea 是第三层特征下的
-                pairs.append(tuple(t_list[i].contiguous(), self.bbox_ori2fea(t_bbox_list[i], cog_field=43, stride=8), 
-                                s_list[i].contiguous()))
+                pairs.append((t_list[i].contiguous(), self.bbox_ori2fea(t_bbox_list[i], cog_field=43, stride=8),  s_list[i].contiguous()))
             conv4 = self.conv4(pairs[0][0])
             self.exemplar = self.conv5(conv4)
             scores = []
@@ -130,11 +130,12 @@ class SiamOGEM(nn.Module):
                 # 还没有确定prev_trks的生成方法,目前手动给定prev_trks
                 prev_trks = [5. for _ in range(b)]
                 # ************************************************
+                # 这句代码，增加的显存特别多
                 pres_ins_enhanced = self.memnet(*pairs[i], i + 1, prev_trks)
                 pres_ins_conv4 = self.conv4(pres_ins_enhanced)
                 pres_ins_conv5 = self.conv5(pres_ins_conv4)
-                score = F.conv2d(pres_ins_conv5.view([1, -1, hs, ws]), self.exemplar, groups=b)
-                score = self.batch_norm(score.transpose(0, 1))
+                score = F.conv2d(pres_ins_conv5.view([1, -1, pres_ins_conv5.shape[2], pres_ins_conv5.shape[3]]), self.exemplar, groups=b)
+                score = score.transpose(0, 1) * config.response_scale +self.corr_bias
                 scores.append(score)
             return torch.cat(scores, dim=1)
 
@@ -149,8 +150,8 @@ class SiamOGEM(nn.Module):
                 self.exemplar_conv3 = conv3
                 self.exemplar = torch.cat([self.exemplar for _ in range(config.num_scale)], dim=0)
                 self.exemplar_conv3 = torch.cat([self.exemplar_conv3 for _ in range(config.num_scale)], dim=0)
-                e_bbox = self.bbox_ori2fea(e_bbox, cog_field=43, stride=8)
-                self.e_bbox = np.concatenate([e_bbox[np.newaxis, :] for _ in range(config.num_scale)])
+                e_bbox = self.bbox_ori2fea(e_bbox[np.newaxis, :] , cog_field=43, stride=8)
+                self.e_bbox = np.concatenate([e_bbox for _ in range(config.num_scale)])
                 return None
             else:
                 prev_ins, pres_ins, prev_i_bboxs, prev_trks = params
@@ -160,7 +161,7 @@ class SiamOGEM(nn.Module):
                 b, c, hs, ws = pres_ins.shape
                 pres_ins_fea = self.features(pres_ins)
                 
-                assert self.exemplar, "self.exemplar should be a tensor with shape [scale, c, w_t, h_t]"
+                assert self.exemplar is not None, "self.exemplar should be a tensor with shape [scale, c, w_t, h_t]"
 
                 # feed in OGEMem
                 if time_step == 1:
@@ -168,11 +169,11 @@ class SiamOGEM(nn.Module):
                     pres_ins_enhanced = self.memnet(self.exemplar_conv3, self.e_bbox, pres_ins_fea, time_step, prev_trks)
                 else:
                     prev_ins_fea_conv3 = self.features(prev_ins)
-                    prev_i_bboxs = self.bbox_ori2fea(prev_i_bboxs, cog_field=43, stride=8)
+                    prev_i_bboxs = self.bbox_ori2fea(prev_i_bboxs.cpu().numpy(), cog_field=43, stride=8)
                     pres_ins_enhanced = self.memnet(prev_ins_fea_conv3, prev_i_bboxs, pres_ins_fea, time_step, prev_trks)
                 pres_ins_conv4 = self.conv4(pres_ins_enhanced)
                 pres_ins_conv5 = self.conv5(pres_ins_conv4)
-                score = F.conv2d(pres_ins_conv5.view([1, -1, hs, ws]), self.exemplar, groups=b)
+                score = F.conv2d(pres_ins_conv5.view([1, -1, pres_ins_conv5.shape[2], pres_ins_conv5.shape[3]]), self.exemplar, groups=b)
                 return score
 
 

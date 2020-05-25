@@ -45,6 +45,11 @@ class OGEMem(MemNetBase):
         self.gpu_id = gpu_id
         if gpu_id >= 0:
             self.device = torch.device("cuda:" + str(gpu_id))
+            with torch.cuda.device(gpu_id):
+                for index in range(OGEMConfig.multi_embed):
+                    self.mem_embedding[index].cuda()
+                    self.fea_embedding[index].cuda()
+                    self.mem_r_embedding[index].cuda()
         else:
             self.device = torch.device("cpu")
 
@@ -204,7 +209,7 @@ class OGEMem(MemNetBase):
             for j in range(prev_bbox[1], prev_bbox[3]+1):
                 rela_start = j * w_s + prev_bbox[0]
                 rela_end = j * w_s + prev_bbox[2] + 1
-                prev_obj_idx.extend(range(rela_start, rela_end))
+                prev_obj_idx.extend(list(range(rela_start, rela_end)))
             # ****************************************************************
             write_sig = self.on_generate_write_weight(prev_trks[i], prev_obj_idx, time_step, i, w_s*h_s) # prev_obj和m(t-1)做attention
             

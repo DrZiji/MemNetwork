@@ -75,15 +75,31 @@ class ImagnetVIDDataset(Dataset):
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 bbox = traj[idxs[i]][1]
 
+                # visual_img = cv2.rectangle(img, (int(bbox[0]), int(bbox[1])),
+                #                              (int(bbox[0] + bbox[2]),
+                #                               int(bbox[1] + bbox[3])), (255, 0, 0), 1)
+                # cv2.imshow("visual_img", visual_img)
+                # cv2.waitKey()
+
                 if i > 0:#应用x_transforms
-                    instance_img, instance_bbox = self.x_transforms(img, bbox)
-                    instances.append(instance_img)
-                    instance_bboxs.append(instance_bbox)
+                    instance_img, instance_bbox = self.x_transforms((img, bbox))
+                    instances.append(instance_img[np.newaxis, :, :, :])
+                    instance_bboxs.append(instance_bbox[np.newaxis, :])
+
+                    # debug_i_img = cv2.rectangle(instance_img, (int(instance_bbox[0]), int(instance_bbox[1])),
+                    #               (int(instance_bbox[0]+instance_bbox[2]), int(instance_bbox[1]+instance_bbox[3])), (0, 0, 0), 1)
+                    # cv2.imshow("debug_i_img", debug_i_img)
+                    # cv2.waitKey()
 
                 if i < config.sequence_train:#应用z_transforms
-                    exemplar_img, exemplar_bbox = self.z_transforms(img, bbox)
-                    exemplars.append(exemplar_img)
-                    exemplar_bboxs.append(exemplar_bbox)
+                    exemplar_img, exemplar_bbox = self.z_transforms((img, bbox))
+                    exemplars.append(exemplar_img[np.newaxis, :, :, :])
+                    exemplar_bboxs.append(exemplar_bbox[np.newaxis, :])
+
+                    # debug_e_img = cv2.rectangle(exemplar_img, (int(exemplar_bbox[0]), int(exemplar_bbox[1])),
+                    #             (int(exemplar_bbox[0]+exemplar_bbox[2]), int(exemplar_bbox[1]+exemplar_bbox[3])), (0, 0, 0), 1)
+                    # cv2.imshow("debug_e_img", debug_e_img)
+                    # cv2.waitKey()
 
         elif self.mode == modekey.evaluate:
             idxs = np.arange(0., float(len(traj)), float(len(traj)) / (config.sequence_eval + 1)).astype(int).tolist()
@@ -97,24 +113,23 @@ class ImagnetVIDDataset(Dataset):
                 bbox = traj[idxs[i]][1]
 
                 if i > 0:  # 应用x_transforms
-                    instance_img, instance_bbox = self.x_transforms(img, bbox)
-                    instances.append(instance_img)
-                    instance_bboxs.append(instance_bbox)
+                    instance_img, instance_bbox = self.x_transforms((img, bbox))
+                    instances.append(instance_img[np.newaxis, :, :, :])
+                    instance_bboxs.append(instance_bbox[np.newaxis, :])
 
                 if i < config.sequence_eval:  # 应用z_transforms
-                    exemplar_img, exemplar_bbox = self.z_transforms(img, bbox)
-                    exemplars.append(exemplar_img)
-                    exemplar_bboxs.append(exemplar_bbox)
+                    exemplar_img, exemplar_bbox = self.z_transforms((img, bbox))
+                    exemplars.append(exemplar_img[np.newaxis, :, :, :])
+                    exemplar_bboxs.append(exemplar_bbox[np.newaxis, :])
         else:
             return RuntimeError('Dataset is not applied to modekey.test')
-        #将exemplar和instance list合并成一个tensor (video_length, 3, ?, ?),第一维合并
+        # 将exemplar和instance list合并成一个tensor (video_length, 3, ?, ?),第一维合并
         exemplar = torch.cat(exemplars, 0)
         exm_bbox = torch.cat(exemplar_bboxs, 0)
         instance = torch.cat(instances, 0)
         ins_bbox = torch.cat(instance_bboxs, 0)
 
         return exemplar, instance, exm_bbox, ins_bbox
-
 
     def __len__(self):
         return self.num

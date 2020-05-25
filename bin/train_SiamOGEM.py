@@ -38,33 +38,37 @@ def train(gpu_id, data_dir):
             test_size=1-config.train_ratio, random_state=config.seed)
 
     # define transforms
-    random_crop_size = config.instance_size - 2 * config.total_stride
     train_z_transforms = transforms.Compose([
         RandomStretch(),
         CenterCrop((config.exemplar_size, config.exemplar_size)),
+		# Normalize(),
         ToTensor()
     ])
     train_x_transforms = transforms.Compose([
         RandomStretch(),
-        RandomCrop((random_crop_size, random_crop_size),
+        RandomCrop((config.instance_size, config.instance_size),
                     config.max_translate),
+		# Normalize(),
         ToTensor()
     ])
     valid_z_transforms = transforms.Compose([
         CenterCrop((config.exemplar_size, config.exemplar_size)),
+		# Normalize(),
         ToTensor()
     ])
     valid_x_transforms = transforms.Compose([
+		CenterCrop((config.instance_size, config.instance_size)),
+        # Normalize(),
         ToTensor()
     ])
 
     # open lmdb
-    db = lmdb.open(data_dir+'.lmdb', readonly=True, map_size=int(50e9))
+    # db = lmdb.open(data_dir+'.lmdb', readonly=True, map_size=int(50e9))
 
     # create dataset
-    train_dataset = ImagnetVIDDataset(db, train_videos, data_dir,
+    train_dataset = ImagnetVIDDataset(train_videos, data_dir,
             train_z_transforms, train_x_transforms)
-    valid_dataset = ImagnetVIDDataset(db, valid_videos, data_dir,
+    valid_dataset = ImagnetVIDDataset(valid_videos, data_dir,
             valid_z_transforms, valid_x_transforms, training=False)
     
     # create dataloader
@@ -94,29 +98,31 @@ def train(gpu_id, data_dir):
             for i, data in enumerate(tqdm(trainloader)):
                 exemplar_imgs, instance_imgs, e_bboxs, i_bboxs = data
                 optimizer.zero_grad()
-                outputs = model(exemplar_imgs, instance_imgs, e_bboxs)
+            	outputs = model(exemplar_imgs.cuda(), instance_imgs.cuda(), e_bboxs.cuda())
                 loss = model.weighted_loss(outputs)
                 loss.backward()
                 optimizer.step()
                 step = epoch * len(trainloader) + i
                 summary_writer.add_scalar('train/loss', loss.data, step)
-                train_loss.append(loss.data)
+                train_loss.append(loss.item())
             train_loss = np.mean(train_loss)
 
             valid_loss = []
             model.eval()
             for i, data in enumerate(tqdm(validloader)):
                 exemplar_imgs, instance_imgs, e_bboxs, i_bboxs = data
-
-                outputs = model(exemplar_imgs, instance_imgs, e_bboxs)
-                loss = model.weighted_loss(outputs)
-                valid_loss.append(loss.data)
+                with torch.no_grad():
+                    outputs = model(exemplar_imgs.cuda(), instance_imgs.cuda(), e_bboxs.cuda())
+                    loss = model.weighted_loss(outputs)
+                valid_loss.append(loss.item())
             valid_loss = np.mean(valid_loss)
             print("EPOCH %d valid_loss: %.4f, train_loss: %.4f" %
                     (epoch, valid_loss, train_loss))
             summary_writer.add_scalar('valid/loss', 
                     valid_loss, (epoch+1)*len(trainloader))
             torch.save(model.cpu().state_dict(), 
-                    "./models/SiamOGEM_{}.pth".format(epoch+1))
+                    "../trained/SiamOGEM_{}.pth".format(epoch+1))
             model.cuda()
             scheduler.step()
+if __name__ == "__main__":
+    train(0, '/home/s03/gdh/data/ILSVRC2015_VID_CURRATION')

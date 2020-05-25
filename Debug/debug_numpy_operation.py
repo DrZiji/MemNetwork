@@ -19,6 +19,8 @@ def bbox_ori2fea(bbox, cog_field, stride):
     return bbox_fea
 
 if __name__ == "__main__":
-    A = np.array([[5, 5, 20, 20],
-                  [8, 3, 30, 29]])
-    A_fea = bbox_ori2fea(A, 10, 2)
+    # A = np.array([[5, 5, 20, 20],
+    #               [8, 3, 30, 29]])
+    # A_fea = bbox_ori2fea(A, 10, 2)
+    t = range(10)
+    print()

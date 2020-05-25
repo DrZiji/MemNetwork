@@ -10,22 +10,23 @@ class RandomStretch(object):
         """
         self.max_stretch = max_stretch
 
-    def __call__(self, sample, bbox):
+    def __call__(self, args):
         """
         Args:
             sample(numpy array): 3 or 1 dim image
         """
+        sample, bbox = args
         scale_h = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         scale_w = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         h, w = sample.shape[:2]
-        shape = (int(h * scale_h), int(w * scale_w))
+        cv_shape = (int(w * scale_w), int(h * scale_h))
         bbox_stretch = np.array([
             bbox[0] * scale_w,
             bbox[1] * scale_h,
             bbox[2] * scale_w,
             bbox[3] * scale_h
         ])
-        return cv2.resize(sample, shape, cv2.INTER_LINEAR), bbox_stretch
+        return cv2.resize(sample, cv_shape, cv2.INTER_LINEAR), bbox_stretch
 
 class CenterCrop(object):
     def __init__(self, size):
@@ -36,13 +37,14 @@ class CenterCrop(object):
         """
         self.size = size
 
-    def __call__(self, sample, bbox):
+    def __call__(self, args):
         """
         Args:
             sample(numpy array): 3 or 1 dim image
         """
+        sample, bbox = args
         shape = sample.shape[:2]
-        cy, cx = (shape[0]-1) // 2, (shape[1]-1) // 2
+        cy, cx = (shape[0] - 1) // 2, (shape[1] - 1) // 2
         ymin, xmin = cy - self.size[0]//2, cx - self.size[1] // 2
         ymax, xmax = cy + self.size[0]//2 + self.size[0] % 2,\
                      cx + self.size[1]//2 + self.size[1] % 2
@@ -57,17 +59,19 @@ class CenterCrop(object):
         if ymax > im_h:
             bottom = int(ymax - im_h)
 
+        new_left_up_x = bbox[0] - xmin
+        new_left_up_y = bbox[1] - ymin
         xmin = int(max(0, xmin))
         xmax = int(min(im_w, xmax))
         ymin = int(max(0, ymin))
         ymax = int(min(im_h, ymax))
+
         im_patch = sample[ymin:ymax, xmin:xmax]
-        bbox[0] = bbox[0] - xmin
-        bbox[1] = bbox[1] - ymin
         if left != 0 or right !=0 or top!=0 or bottom!=0:
             im_patch = cv2.copyMakeBorder(im_patch, top, bottom, left, right,
                     cv2.BORDER_CONSTANT, value=0)
-        return im_patch, bbox
+        return im_patch, np.array([new_left_up_x, new_left_up_y, bbox[2], bbox[3]])
+
 
 class RandomCrop(object):
     def __init__(self, size, max_translate):
@@ -80,11 +84,12 @@ class RandomCrop(object):
         self.size = size
         self.max_translate = max_translate
 
-    def __call__(self, sample, bbox):
+    def __call__(self, args):
         """
         Args:
             sample(numpy array): 3 or 1 dim image
         """
+        sample, bbox = args
         shape = sample.shape[:2]
         cy_o = (shape[0] - 1) // 2
         cx_o = (shape[1] - 1) // 2
@@ -109,17 +114,19 @@ class RandomCrop(object):
         if ymax > im_h:
             bottom = int(ymax - im_h)
 
+        new_left_up_x = bbox[0] - xmin
+        new_left_up_y = bbox[1] - ymin
         xmin = int(max(0, xmin))
         xmax = int(min(im_w, xmax))
         ymin = int(max(0, ymin))
         ymax = int(min(im_h, ymax))
         im_patch = sample[ymin:ymax, xmin:xmax]
-        bbox[0] = bbox[0] - xmin
-        bbox[1] = bbox[1] - ymin
+
         if left != 0 or right !=0 or top!=0 or bottom!=0:
             im_patch = cv2.copyMakeBorder(im_patch, top, bottom, left, right,
                     cv2.BORDER_CONSTANT, value=0)
-        return im_patch, bbox
+        return im_patch, np.array([new_left_up_x, new_left_up_y, bbox[2], bbox[3]])
+
 
 class ColorAug(object):
     def __init__(self, type_in='z'):
@@ -134,7 +141,8 @@ class ColorAug(object):
         self.v, _ = np.linalg.eig(rgb_var)
         self.v = np.sqrt(self.v)
 
-    def __call__(self, sample, bbox):
+    def __call__(self, args):
+        sample, bbox = args
         return sample + 0.1 * self.v * np.random.randn(3), bbox
 
 
@@ -142,7 +150,8 @@ class RandomBlur(object):
     def __init__(self, ratio):
         self.ratio = ratio
 
-    def __call__(self, sample, bbox):
+    def __call__(self, args):
+        sample, bbox = args
         if np.random.rand(1) < self.ratio:
             # random kernel size
             kernel_size = np.random.choice([3, 5, 7])
@@ -152,15 +161,18 @@ class RandomBlur(object):
         else:
             return sample, bbox
 
+
 class Normalize(object):
     def __init__(self):
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-    def __call__(self, sample, bbox):
+    def __call__(self, args):
+        sample, bbox = args
         return (sample / 255. - self.mean) / self.std, bbox
 
 class ToTensor(object):
-    def __call__(self, sample, bbox):
+    def __call__(self, args):
+        sample, bbox = args
         sample = sample.transpose(2, 0, 1)
         return torch.from_numpy(sample.astype(np.float32)), torch.from_numpy(bbox.astype(np.float32))

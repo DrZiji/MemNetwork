@@ -10,7 +10,7 @@ from torch.autograd import Variable
 
 from SiamFC import SiamOGEM
 from global_config import config, modekey
-from SiamFC.custom_transforms import ToTensor
+from SiamFC.custom_transforms import ToTensor, Normalize
 from SiamFC.utils import get_exemplar_image, get_pyramid_instance_image, get_instance_image
 
 torch.set_num_threads(1) # otherwise pytorch will take all cpus
@@ -20,10 +20,13 @@ class SiamOGEMTracker:
         self.gpu_id = gpu_id
         with torch.cuda.device(gpu_id), torch.no_grad():
             self.model = SiamOGEM(gpu_id, mode=modekey.test)
+			# original_model = torch.load(model_path)
+            # present_model = self.model.state_dict()
             self.model.load_state_dict(torch.load(model_path))
             self.model = self.model.cuda()
             self.model.eval() 
         self.transforms = transforms.Compose([
+			# Normalize(),
             ToTensor()
         ])
 
@@ -49,8 +52,8 @@ class SiamOGEMTracker:
         exemplar_img, scale_z, s_z, e_bbox = get_exemplar_image(frame, self.bbox,
                 config.exemplar_size, config.context_amount, self.img_mean)
         # get exemplar feature
-        exemplar_img, e_bbox = self.transforms(exemplar_img, e_bbox)
-        self.e_bbox = e_bbox.cpu().item()
+        exemplar_img, e_bbox = self.transforms((exemplar_img, e_bbox))
+        self.e_bbox = e_bbox.cpu().numpy()
 
         with torch.cuda.device(self.gpu_id), torch.no_grad():
             self.model((exemplar_img.unsqueeze(0).cuda(), self.e_bbox), time_step)
@@ -78,15 +81,15 @@ class SiamOGEMTracker:
             bbox: tuple of 1-based bounding box(xmin, ymin, xmax, ymax)
         """
         # 为了计算方便，拿到上一帧的跟踪结果，在上一阵中裁剪出大小为(scale, 3, 127, 127)大小的图片作为给Memnet的数据
-        if prev_i_bbox and prev_frame:
-            prev_instance_img = get_exemplar_image(prev_frame, prev_i_bbox, 
+        if prev_i_bbox is not None and prev_frame is not None:
+            prev_instance_img, _, _, prev_i_bbox = get_exemplar_image(prev_frame, prev_i_bbox,
                     config.exemplar_size, config.context_amount, self.img_mean)
-            prev_instance_img, prev_i_bbox = self.transforms(prev_instance_img, prev_i_bbox)
-            prev_instance_imgs = torch.cat([prev_instance_imgs for _ in range(config.num_scale)], dim=0)
-            prev_i_bboxs = torch.cat([prev_i_bboxs for _ in range(config.num_scale)], dim=0)
+            prev_instance_img, prev_i_bbox = self.transforms((prev_instance_img, prev_i_bbox))
+            prev_instance_imgs = torch.cat([prev_instance_img[None, :, :, :] for _ in range(config.num_scale)], dim=0)
+            prev_i_bboxs = torch.cat([prev_i_bbox[None, :] for _ in range(config.num_scale)], dim=0)
             with torch.cuda.device(self.gpu_id), torch.no_grad():
                 prev_instance_imgs = prev_instance_imgs.cuda()
-                prev_i_bboxs = prev_i_bboxs.cuda()
+
         else:
             prev_instance_imgs = None
             prev_i_bboxs = None
@@ -97,7 +100,7 @@ class SiamOGEMTracker:
         temp_bbox = np.array([np.NaN, np.NaN])
         instance_imgs = []
         for x in pyramid:
-            instance_img, _ = self.transforms(x, temp_bbox)
+            instance_img, _ = self.transforms((x, temp_bbox))
             instance_imgs.append(instance_img.unsqueeze(0))
         instance_imgs = torch.cat(instance_imgs, dim=0)
 
@@ -136,4 +139,4 @@ class SiamOGEMTracker:
                 self.pos[1] - self.target_sz[1]/2 + 1, # ymin
                 self.pos[0] + self.target_sz[0]/2 + 1, # xmax
                 self.pos[1] + self.target_sz[1]/2 + 1) # ymax
-        return bbox, [max_score for _ in config.num_scale]
+        return bbox, [max_score for _ in range(config.num_scale)]

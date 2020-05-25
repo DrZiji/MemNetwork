@@ -51,8 +51,8 @@ def get_exemplar_image(img, bbox, size_z, context_amount, img_mean=None):
 
     w_exe = w * scale_z
     h_exe = h * scale_z
-    left_up_x = (size_z - w_exe) // 2
-    left_up_y = (size_z - h_exe) // 2
+    left_up_x = (size_z - w_exe) / 2
+    left_up_y = (size_z - h_exe) / 2
     return exemplar_img, scale_z, s_z, np.array([left_up_x, left_up_y, w_exe, h_exe])
 
 def get_instance_image(img, bbox, size_z, size_x, context_amount, img_mean=None):
@@ -69,8 +69,8 @@ def get_instance_image(img, bbox, size_z, size_x, context_amount, img_mean=None)
     # 根据w, h获得目标的bbox左上坐标
     w_ins = w * scale_z
     h_ins = h * scale_z
-    left_up_x = (size_x - w_ins) // 2
-    left_up_y = (size_x - h_ins) // 2
+    left_up_x = (size_x - w_ins) / 2
+    left_up_y = (size_x - h_ins) / 2
     return instance_img, scale_x, s_x, np.array([left_up_x, left_up_y, w_ins, h_ins])
 
 def get_pyramid_instance_image(img, center, size_x, size_x_scales, img_mean=None):

@@ -4,14 +4,11 @@ import pandas as pd
 import argparse
 import numpy as np
 import cv2
-import time
 import sys
 sys.path.append(os.getcwd())
 
 from fire import Fire
-from tqdm import tqdm
-
-from siamfc import SiamFCTracker
+from bin.tracker import SiamOGEMTracker
 
 def main(video_dir, gpu_id,  model_path):
     # load videos
@@ -24,7 +21,7 @@ def main(video_dir, gpu_id,  model_path):
 
     title = video_dir.split('/')[-1]
     # starting tracking
-    tracker = SiamFCTracker(model_path, gpu_id)
+    tracker = SiamOGEMTracker(model_path, gpu_id)
 
     prev_bbox = None
     prev_max_trk = None
@@ -36,11 +33,12 @@ def main(video_dir, gpu_id,  model_path):
                     bbox[0]+bbox[2]-1, bbox[1]+bbox[3]-1)
         elif idx == 1: 
             bbox, max_trk = tracker.update(frame, idx)
+            prev_bbox = bbox
+            prev_max_trk = max_trk
         else:
-            bbox, max_trk = tracker.update(frame, idx, frame[idx-1], prev_bbox, prev_max_trk)
-
-        prev_bbox = bbox
-        prev_max_trk = max_trk
+            bbox, max_trk = tracker.update(frame, idx, frames[idx-1], np.array(prev_bbox), prev_max_trk)
+            prev_bbox = bbox
+            prev_max_trk = max_trk
         # bbox xmin ymin xmax ymax
         frame = cv2.rectangle(frame,
                               (int(bbox[0]), int(bbox[1])),
@@ -62,4 +60,20 @@ def main(video_dir, gpu_id,  model_path):
         cv2.waitKey(30)
 
 if __name__ == "__main__":
-    Fire(main)
+    video_dir = '/home/s03/gdh/sequences'
+    video_name = os.listdir(video_dir)
+    # model_path = '/home/s01/gdh/SiamFC-PyTorch/models/siamfc_kpm20.pth'
+    gpu_id = 0
+    for epoch in range(1, 2):
+        model_name = 'siamfc_' + str(epoch)
+
+        model_path = '/home/s03/gdh/MemNetwork/trained_models/SiamOGEM_' + str(epoch) + '.pth'
+        for name in video_name:
+            print('sequence', name)
+            result = main(video_dir + '/' + name, gpu_id, model_path)
+            if not os.path.exists('../result/' + model_name):
+                os.mkdir('../result/' + model_name)
+            with open('../result/' + model_name + '/' + name + '.txt', 'w', encoding='utf-8') as f:
+                for bbox in result:
+                    f.write(str(bbox[0]) + " " + str(bbox[1]) + " " + str(bbox[2] - bbox[0]) + " " + str(
+                        bbox[3] - bbox[1]) + '\n')

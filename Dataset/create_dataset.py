@@ -48,10 +48,20 @@ def worker(output_dir, video_dir):
 
             instance_img, _, _, bbox_alter = get_instance_image(img, bbox,
                     config.exemplar_size, config.data_size, config.context_amount, img_mean)
-            """
+
+            # instance_img = cv2.rectangle(instance_img, (int(bbox_alter[0]), int(bbox_alter[1])),
+            #               (int(bbox_alter[0]+bbox_alter[2]), int(bbox_alter[1]+bbox_alter[3])), (0, 0, 0), 1)
+            # cv2.imshow("debug_img", instance_img)
+            # cv2.waitKey()
+
             instance_img_name = os.path.join(save_folder, filename+".{:02d}.x.jpg".format(trkid))
-            cv2.imwrite(instance_img_name, instance_img)#这里已经将crop后的图片写入本地,crop的图片是(255,255,3)大小的
-            """
+            cv2.imwrite(instance_img_name, instance_img) # 这里已经将crop后的图片写入本地,crop的图片是(272,272,3)大小的
+
+            # read_img = cv2.imread(instance_img_name)
+            # read_img = cv2.cvtColor(read_img, cv2.COLOR_BGR2RGB)
+            # cv2.imshow('read_img', read_img)
+            # cv2.waitKey()
+
             if trkid in trajs:
                 trajs[trkid].append((filename, bbox_alter))
             else:

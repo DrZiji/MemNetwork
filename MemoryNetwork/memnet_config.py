@@ -11,9 +11,9 @@ class MemTrackConfig:
 MTConfig = MemTrackConfig()
 
 class ObjGuidedEMemConfig:
-    batch = 8
-    memory_depth = 10
-    multi_embed = 5
+    batch = 2
+    memory_depth = 384
+    multi_embed = 8
     alpha = 0.47
     taw = 0.9
 
