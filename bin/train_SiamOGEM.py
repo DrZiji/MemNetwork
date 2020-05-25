@@ -96,9 +96,9 @@ def train(gpu_id, data_dir):
             train_loss = []
             model.train()
             for i, data in enumerate(tqdm(trainloader)):
-                exemplar_imgs, instance_imgs, e_bboxs, i_bboxs = data
+                exemplar_img, instance_imgs, e_bbox, i_bboxs = data
                 optimizer.zero_grad()
-            	outputs = model(exemplar_imgs.cuda(), instance_imgs.cuda(), e_bboxs.cuda())
+                outputs = model(exemplar_img.cuda(), instance_imgs.cuda(), e_bbox.cuda(), i_bboxs.cuda())
                 loss = model.weighted_loss(outputs)
                 loss.backward()
                 optimizer.step()
@@ -110,9 +110,9 @@ def train(gpu_id, data_dir):
             valid_loss = []
             model.eval()
             for i, data in enumerate(tqdm(validloader)):
-                exemplar_imgs, instance_imgs, e_bboxs, i_bboxs = data
+                exemplar_img, instance_imgs, e_bbox, i_bboxs = data
                 with torch.no_grad():
-                    outputs = model(exemplar_imgs.cuda(), instance_imgs.cuda(), e_bboxs.cuda())
+                    outputs = model(exemplar_img.cuda(), instance_imgs.cuda(), e_bbox.cuda(), i_bboxs.cuda())
                     loss = model.weighted_loss(outputs)
                 valid_loss.append(loss.item())
             valid_loss = np.mean(valid_loss)

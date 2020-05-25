@@ -53,9 +53,9 @@ class ImagnetVIDDataset(Dataset):
         trkid = np.random.choice(list(trajs.keys()))
         traj = trajs[trkid]#包含相同目标的一系列帧
         assert len(traj) >= config.sequence_length, "video_name: {}".format(video)
-        exemplars = []
+        # exemplars = []
         instances = []
-        exemplar_bboxs = []
+        # exemplar_bboxs = []
         instance_bboxs = []
         if self.mode == modekey.train:
             first_idx = np.random.choice(list(range(len(traj) - config.sequence_length)))
@@ -91,11 +91,8 @@ class ImagnetVIDDataset(Dataset):
                     # cv2.imshow("debug_i_img", debug_i_img)
                     # cv2.waitKey()
 
-                if i < config.sequence_train:#应用z_transforms
+                if i < 1:#应用z_transforms
                     exemplar_img, exemplar_bbox = self.z_transforms((img, bbox))
-                    exemplars.append(exemplar_img[np.newaxis, :, :, :])
-                    exemplar_bboxs.append(exemplar_bbox[np.newaxis, :])
-
                     # debug_e_img = cv2.rectangle(exemplar_img, (int(exemplar_bbox[0]), int(exemplar_bbox[1])),
                     #             (int(exemplar_bbox[0]+exemplar_bbox[2]), int(exemplar_bbox[1]+exemplar_bbox[3])), (0, 0, 0), 1)
                     # cv2.imshow("debug_e_img", debug_e_img)
@@ -117,19 +114,17 @@ class ImagnetVIDDataset(Dataset):
                     instances.append(instance_img[np.newaxis, :, :, :])
                     instance_bboxs.append(instance_bbox[np.newaxis, :])
 
-                if i < config.sequence_eval:  # 应用z_transforms
+                if i < 1:  # 应用z_transforms
                     exemplar_img, exemplar_bbox = self.z_transforms((img, bbox))
-                    exemplars.append(exemplar_img[np.newaxis, :, :, :])
-                    exemplar_bboxs.append(exemplar_bbox[np.newaxis, :])
         else:
             return RuntimeError('Dataset is not applied to modekey.test')
         # 将exemplar和instance list合并成一个tensor (video_length, 3, ?, ?),第一维合并
-        exemplar = torch.cat(exemplars, 0)
-        exm_bbox = torch.cat(exemplar_bboxs, 0)
+        # exemplar = torch.cat(exemplars, 0)
+        # exm_bbox = torch.cat(exemplar_bboxs, 0)
         instance = torch.cat(instances, 0)
         ins_bbox = torch.cat(instance_bboxs, 0)
 
-        return exemplar, instance, exm_bbox, ins_bbox
+        return exemplar_img, exemplar_bbox, instance, ins_bbox
 
     def __len__(self):
         return self.num

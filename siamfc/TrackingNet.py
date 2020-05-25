@@ -61,10 +61,9 @@ class SiamOGEM(nn.Module):
             return F.binary_cross_entropy_with_logits(pred, self.valid_gt,
                     self.valid_weight, reduction='sum') / (config.train_batch_size * config.sequence_eval) # normalize the batch_size
 
-    def bbox_ori2fea(self, bbox, cog_field, stride):
+    def bbox_ori2fea(self, bbox, stride):
         """
         :param bbox: ndarray float [batch, 4].在图片中的目标框
-        :param cog_field: int 当前特征图中一个点代表的感受野
         :param stride: 获得当前特征网络的stride
         :return ndarray int [batch, 4].在特征中的目标框
         """
@@ -74,9 +73,12 @@ class SiamOGEM(nn.Module):
         right_down_y = (bbox[:, 1] + bbox[:, 3])[:, np.newaxis]
 
         temp = np.concatenate((left_up_x, left_up_y, right_down_x, right_down_y), axis=1)
-        temp = (temp - cog_field) / stride + 1
-        temp = temp.astype(np.int)
-        bbox_fea = np.where(temp > 0, temp, 0)
+        temp = temp / stride
+        temp[:, 0] += 1
+        temp[:, 1] += 1
+        temp[:, 2] -= 1
+        temp[:, 3] -= 1
+        bbox_fea = temp.astype(np.int)
         return bbox_fea
 
     def _create_gt_mask(self, shape):
@@ -97,33 +99,33 @@ class SiamOGEM(nn.Module):
 
     def forward(self, *args):
         if self.mode != modekey.test:
-            exemplars, instances, e_bboxs = args
+            exemplar, instances, e_bbox, i_bboxs = args
             """
-            exemplars/instances一定是五维tensor: [batch, videolength, c, h, w].
-            e_bboxs/i_bboxs: [batch, videolength, 4]
+            exemplar是四维tensor[batch, c, h, w]
+            instances一定是五维tensor: [batch, videolength, c, h, w].
+            e_bbox: [batch, 4]
+            i_bboxs: [batch, video_length, 4]
             """
-            b, vl, c, ht, wt = exemplars.shape
-            _, _, _, hs, ws = instances.shape
-            exemplars = exemplars.view(-1, c, ht, wt)
+            b, c, ht, wt = exemplar.shape
+            _, vl, _, hs, ws = instances.shape
             instances = instances.view(-1, c, hs, ws)
-            t_feas = self.features(exemplars) # t_feas = self.features(exemplars).detach_()
+            t_feas = self.features(exemplar) # t_feas = self.features(exemplar).detach_()
             s_feas = self.features(instances)
 
-            temp, c, ht, wt = t_feas.shape
+            _, c, ht, wt = t_feas.shape
             _, _, hs, ws = s_feas.shape
-            t_feas = t_feas.view(b, vl, c, ht, wt)
             s_feas = s_feas.view(b, vl, c, hs, ws)
-            pairs = []
 
             # make feature tensor list of pairs
             self.prev_trks = [None for _ in range(b)] # 上一帧的跟踪结果最大值,初始化为None
-            t_list = [torch.Tensor.view(x, [b, c, ht, wt]) for x in t_feas.split(1, dim=1)]
-            s_list = [torch.Tensor.view(x, [b, c, hs, ws]) for x in s_feas.split(1, dim=1)]
-            t_bbox_list = [x.view(b, 4).cpu().numpy() for x in e_bboxs.split(1, dim=1)]
-            for i in range(vl):
+            # t_list = [torch.Tensor.view(x, [b, c, ht, wt]) for x in t_feas.split(1, dim=1)]
+            s_list = [torch.Tensor.view(x, [b, c, hs, ws]).contiguous() for x in s_feas.split(1, dim=1)]
+            s_bbox_list = [x.view(b, 4).cpu().numpy() for x in i_bboxs.split(1, dim=1)]
+            pairs = [(exemplar, self.bbox_ori2fea(e_bbox, stride=8), s_list[0])]
+            for i in range(1, vl):
                 # bbox_fea 是第三层特征下的
-                pairs.append((t_list[i].contiguous(), self.bbox_ori2fea(t_bbox_list[i], cog_field=43, stride=8),  s_list[i].contiguous()))
-            conv4 = self.conv4(pairs[0][0])
+                pairs.append((s_list[i - 1], self.bbox_ori2fea(s_bbox_list[i], stride=8),  s_list[i]))
+            conv4 = self.conv4(exemplar)
             self.exemplar = self.conv5(conv4)
             scores = []
             for i in range(len(pairs)):
@@ -143,6 +145,8 @@ class SiamOGEM(nn.Module):
             params, time_step = args
             if time_step == 0:
                 # 对应tracker.py中的tracker.init()
+                # exemplar tensor [1, 3, 127, 127]
+                # e_bbox [4]
                 exemplar, e_bbox = params
                 conv3 = self.features(exemplar)
                 conv4 = self.conv4(conv3)
@@ -150,7 +154,7 @@ class SiamOGEM(nn.Module):
                 self.exemplar_conv3 = conv3
                 self.exemplar = torch.cat([self.exemplar for _ in range(config.num_scale)], dim=0)
                 self.exemplar_conv3 = torch.cat([self.exemplar_conv3 for _ in range(config.num_scale)], dim=0)
-                e_bbox = self.bbox_ori2fea(e_bbox[np.newaxis, :] , cog_field=43, stride=8)
+                e_bbox = self.bbox_ori2fea(e_bbox[np.newaxis, :], stride=8)
                 self.e_bbox = np.concatenate([e_bbox for _ in range(config.num_scale)])
                 return None
             else:
@@ -169,7 +173,7 @@ class SiamOGEM(nn.Module):
                     pres_ins_enhanced = self.memnet(self.exemplar_conv3, self.e_bbox, pres_ins_fea, time_step, prev_trks)
                 else:
                     prev_ins_fea_conv3 = self.features(prev_ins)
-                    prev_i_bboxs = self.bbox_ori2fea(prev_i_bboxs.cpu().numpy(), cog_field=43, stride=8)
+                    prev_i_bboxs = self.bbox_ori2fea(prev_i_bboxs.cpu().numpy(), stride=8)
                     pres_ins_enhanced = self.memnet(prev_ins_fea_conv3, prev_i_bboxs, pres_ins_fea, time_step, prev_trks)
                 pres_ins_conv4 = self.conv4(pres_ins_enhanced)
                 pres_ins_conv5 = self.conv5(pres_ins_conv4)

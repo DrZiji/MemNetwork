@@ -35,21 +35,21 @@ class OGEMem(MemNetBase):
 
         super(OGEMem, self).__init__()
         embed_i_c, embed_o_c, gpu_id = args
-        self.mem_embedding = [self.linear(OGEMConfig.memory_depth, embed_o_c // OGEMConfig.multi_embed) \
-                                for _ in range(OGEMConfig.multi_embed)]
-        self.fea_embedding = [self.linear(embed_i_c, embed_o_c // OGEMConfig.multi_embed) \
-                                for _ in range(OGEMConfig.multi_embed)]
-        self.mem_r_embedding = [self.linear(OGEMConfig.memory_depth, embed_o_c // OGEMConfig.multi_embed) \
-                                for _ in range(OGEMConfig.multi_embed)]
+        self.mem_embedding = nn.ModuleList([self.linear(OGEMConfig.memory_depth, embed_o_c // OGEMConfig.multi_embed) \
+                                for _ in range(OGEMConfig.multi_embed)])
+        self.fea_embedding = nn.ModuleList([self.linear(embed_i_c, embed_o_c // OGEMConfig.multi_embed) \
+                                for _ in range(OGEMConfig.multi_embed)])
+        self.mem_r_embedding = nn.ModuleList([self.linear(OGEMConfig.memory_depth, embed_o_c // OGEMConfig.multi_embed) \
+                                for _ in range(OGEMConfig.multi_embed)])
         
         self.gpu_id = gpu_id
         if gpu_id >= 0:
             self.device = torch.device("cuda:" + str(gpu_id))
-            with torch.cuda.device(gpu_id):
-                for index in range(OGEMConfig.multi_embed):
-                    self.mem_embedding[index].cuda()
-                    self.fea_embedding[index].cuda()
-                    self.mem_r_embedding[index].cuda()
+            # with torch.cuda.device(gpu_id):
+            #      for index in range(OGEMConfig.multi_embed):
+            #          self.mem_embedding[index].cuda()
+            #          self.fea_embedding[index].cuda()
+            #          self.mem_r_embedding[index].cuda()
         else:
             self.device = torch.device("cpu")
 
@@ -128,7 +128,6 @@ class OGEMem(MemNetBase):
         read = torch.cat(mem, dim=2) # [1, l_f, c]
         return read
 
-
     def on_generate_attention(self, feature_flatten, time_step, batch_index):
         """
         :param feature_flatten: torch.Tensor, shape = [1, l, c], l = w * h
@@ -205,14 +204,19 @@ class OGEMem(MemNetBase):
             prev_bbox = prev_bboxes[i]
             prev_obj = prev_fea[i, :, prev_bbox[0]:prev_bbox[2]+1, prev_bbox[1]:prev_bbox[3]+1]
             prev_obj_flatten = prev_obj.contiguous().view(c, -1).transpose(0, 1).unsqueeze(0)
-            prev_obj_idx = []
-            for j in range(prev_bbox[1], prev_bbox[3]+1):
-                rela_start = j * w_s + prev_bbox[0]
-                rela_end = j * w_s + prev_bbox[2] + 1
-                prev_obj_idx.extend(list(range(rela_start, rela_end)))
+            if time_step == 1:
+                prev_obj_idx = None
+                fea_len = None
+            else:
+                prev_obj_idx = []
+                fea_len = w_s * h_s
+                for j in range(prev_bbox[1], prev_bbox[3]+1):
+                    rela_start = j * w_s + prev_bbox[0]
+                    rela_end = j * w_s + prev_bbox[2] + 1
+                    prev_obj_idx.extend(list(range(rela_start, rela_end)))
             # ****************************************************************
-            write_sig = self.on_generate_write_weight(prev_trks[i], prev_obj_idx, time_step, i, w_s*h_s) # prev_obj和m(t-1)做attention
-            
+            write_sig = self.on_generate_write_weight(prev_trks[i], prev_obj_idx, time_step, i, fea_len) # prev_obj和m(t-1)做attention
+
             if write_sig:
                 self.on_memory_write(prev_obj_flatten, time_step, i)
 
