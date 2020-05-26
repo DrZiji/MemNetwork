@@ -34,10 +34,12 @@ class OGEMem(MemNetBase):
     def __init__(self, *args):
 
         super(OGEMem, self).__init__()
+        # embed_i_c : 输入网络的数据channel, 该值一般和OGEMConfig.memory_depth相等
+        # embed_o_c : 输出网络的数据channel, 该值一般和embed_i_c值相等
         embed_i_c, embed_o_c, gpu_id = args
-        self.mem_embedding = nn.ModuleList([self.linear(OGEMConfig.memory_depth, embed_o_c // OGEMConfig.multi_embed) \
+        self.mem_embedding = nn.ModuleList([self.linear(OGEMConfig.memory_depth, OGEMConfig.memory_att_depth // OGEMConfig.multi_embed) \
                                 for _ in range(OGEMConfig.multi_embed)])
-        self.fea_embedding = nn.ModuleList([self.linear(embed_i_c, embed_o_c // OGEMConfig.multi_embed) \
+        self.fea_embedding = nn.ModuleList([self.linear(embed_i_c, OGEMConfig.memory_att_depth // OGEMConfig.multi_embed) \
                                 for _ in range(OGEMConfig.multi_embed)])
         self.mem_r_embedding = nn.ModuleList([self.linear(OGEMConfig.memory_depth, embed_o_c // OGEMConfig.multi_embed) \
                                 for _ in range(OGEMConfig.multi_embed)])
@@ -140,25 +142,36 @@ class OGEMem(MemNetBase):
         _, l_m, c_m = self.memory[batch_index][0].shape
 
         mem_expand = self.memory[batch_index][0].unsqueeze(2)  # [1, l_m, 1, c]
-        mem_expand = mem_expand.repeat([1, 1, l_f, 1])
-        mem_expand = mem_expand.view(b, -1, c_m)
+        mem_expand_1 = mem_expand.repeat([1, 1, l_f, 1])
+        mem_expand_1 = mem_expand_1.view(b, -1, c_m)
+        mem_expand_2 = mem_expand.expand(-1, -1, l_f, -1)
+
         fea_expand = feature_flatten.unsqueeze(1)  # [1, 1, l_f c]
-        fea_expand = fea_expand.repeat([1, l_m, 1, 1])
-        fea_expand = fea_expand.view(b, -1, c_f)
+        fea_expand_1 = fea_expand.repeat([1, l_m, 1, 1])
+        fea_expand_1 = fea_expand_1.view(b, -1, c_f)
+        fea_expand_2 = fea_expand.expand(-1, l_m, -1, -1)
 
         cos_simi_mats = []
         att_mats = []
         for i in range(OGEMConfig.multi_embed):
             # multi head embedding
-            mem_expand_embed = self.mem_embedding[i](mem_expand).view(b*l_f*l_m, -1)
-            fea_expand_embed = self.fea_embedding[i](fea_expand).view(b*l_f*l_m, -1)
+            mem_expand_embed_1 = self.mem_embedding[i](mem_expand_1).view(b*l_f*l_m, -1)
+            fea_expand_embed_1 = self.fea_embedding[i](fea_expand_1).view(b*l_f*l_m, -1)
+
+            mem_expand_embed_2 = self.mem_embedding[i](mem_expand_2).view(b*l_f*l_m, -1)
+            fea_expand_embed_2 = self.fea_embedding[i](fea_expand_2).view(b*l_f*l_m, -1)
 
             # 每一行代表memory的一个row与整个feature的相似性;
-            cos_simi_mat = F.cosine_similarity(mem_expand_embed, fea_expand_embed).view(b, l_m, l_f)
-            # 对行向量做softmax
-            att_mat = F.softmax(cos_simi_mat, dim=2)
+            cos_simi_mat_1 = F.cosine_similarity(mem_expand_embed_1, fea_expand_embed_1).view(b, l_m, l_f)
+            cos_simi_mat_2 = F.cosine_similarity(mem_expand_embed_2, fea_expand_embed_2).view(b, l_m, l_f)
 
-            cos_simi_mats.append(cos_simi_mat.unsqueeze(-1))
+            result_mem = torch.equal(mem_expand_embed_1, mem_expand_embed_2)
+            result_fea = torch.equal(fea_expand_embed_1, fea_expand_embed_2)
+            result_simi = torch.equal(cos_simi_mat_1, cos_simi_mat_2)
+            # 对行向量做softmax
+            att_mat = F.softmax(cos_simi_mat_1, dim=2)
+
+            cos_simi_mats.append(cos_simi_mat_1.unsqueeze(-1))
             att_mats.append(att_mat.unsqueeze(-1))
 
         att_mat_m = torch.cat(att_mats, dim=-1) # [1, l_m, l_f, OGEMConfig.multi_head]

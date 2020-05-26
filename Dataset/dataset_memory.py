@@ -124,7 +124,7 @@ class ImagnetVIDDataset(Dataset):
         instance = torch.cat(instances, 0)
         ins_bbox = torch.cat(instance_bboxs, 0)
 
-        return exemplar_img, exemplar_bbox, instance, ins_bbox
+        return exemplar_img, instance, exemplar_bbox, ins_bbox
 
     def __len__(self):
         return self.num
